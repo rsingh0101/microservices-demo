@@ -17,8 +17,9 @@ package main
 import (
 	"context"
 	"net/http"
-	"time"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/sirupsen/logrus"
@@ -75,6 +76,7 @@ func (lh *logHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			"http.resp.took_ms": int64(time.Since(start) / time.Millisecond),
 			"http.resp.status":  rr.status,
 			"http.resp.bytes":   rr.b}).Debugf("request complete")
+		requestsTotal.WithLabelValues(r.Method, r.URL.Path, strconv.Itoa(rr.status)).Inc()
 	}()
 
 	ctx = context.WithValue(ctx, ctxKeyLog{}, log)
