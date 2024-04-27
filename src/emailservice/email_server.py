@@ -16,6 +16,7 @@
 
 from concurrent import futures
 import argparse
+import threading
 import os
 import sys
 import time
@@ -40,7 +41,14 @@ import googlecloudprofiler
 
 from logger import getJSONLogger
 logger = getJSONLogger('emailservice-server')
-
+from prometheus_client import Counter, generate_latest
+from flask import Flask, Response
+app = Flask(__name__)
+# Initialize Flask app
+email_sent_counter = Counter('email_sent_total', 'Total number of emails sent')
+@app.route('/metrics')
+def metrics():
+    return Response(generate_latest(), mimetype='text/plain')
 # Loads confirmation email template from file
 env = Environment(
     loader=FileSystemLoader('templates'),
@@ -85,7 +93,7 @@ class EmailService(BaseEmailService):
   def SendOrderConfirmation(self, request, context):
     email = request.email
     order = request.order
-
+    email_sent_counter.inc()
     try:
       confirmation = template.render(order = order)
     except TemplateError as err:
@@ -163,7 +171,8 @@ def initStackdriverProfiling():
 
 if __name__ == '__main__':
   logger.info('starting the email service in dummy mode.')
-
+  flask_thread = threading.Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': 8081})
+  flask_thread.start()
   # Profiler
   try:
     if "DISABLE_PROFILER" in os.environ:

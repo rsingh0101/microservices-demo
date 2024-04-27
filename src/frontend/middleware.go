@@ -72,6 +72,11 @@ func (lh *logHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Debug("request started")
 	defer func() {
+		duration := time.Since(start).Seconds()
+		statusCode := rr.status
+		method := r.Method
+		handler := r.URL.Path
+		requestDuration.WithLabelValues(method, handler, strconv.Itoa(statusCode)).Observe(duration)
 		log.WithFields(logrus.Fields{
 			"http.resp.took_ms": int64(time.Since(start) / time.Millisecond),
 			"http.resp.status":  rr.status,

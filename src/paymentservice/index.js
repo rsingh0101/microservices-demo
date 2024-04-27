@@ -17,7 +17,6 @@
 'use strict';
 
 const logger = require('./logger')
-
 if(process.env.DISABLE_PROFILER) {
   logger.info("Profiler disabled.")
 }
@@ -62,12 +61,12 @@ else {
 }
 
 
-const path = require('path');
-const HipsterShopServer = require('./server');
+  const path = require('path');
+  const {HipsterShopServer} = require('./server');
 
-const PORT = process.env['PORT'];
-const PROTO_PATH = path.join(__dirname, '/proto/');
+  const PORT = process.env['PORT'];
+  const PROTO_PATH = path.join(__dirname, '/proto/');
 
-const server = new HipsterShopServer(PROTO_PATH, PORT);
+  const server = new HipsterShopServer(PROTO_PATH, PORT);
 
-server.listen();
+  server.listen();

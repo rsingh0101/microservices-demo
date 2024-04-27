@@ -18,12 +18,15 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"time"
 
 	"cloud.google.com/go/profiler"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -43,11 +46,34 @@ import (
 const (
 	listenPort  = "5050"
 	usdCurrency = "USD"
+	metricsPort = "8081"
 )
 
+// var metricsRegistered bool = false
 var log *logrus.Logger
+var (
+	orderDetailsCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "order_details_total",
+			Help: "Total number of order details processed.",
+		},
+		[]string{"orderId", "shippingTrackingId", "shippingCost"},
+	)
+)
 
 func init() {
+	// if !metricsRegistered {
+	prometheus.MustRegister(orderDetailsCounter)
+	http.Handle("/metrics", promhttp.Handler())
+	go func() {
+		log.Infof("Prometheus metrics server listening on port %s", metricsPort)
+		err := http.ListenAndServe(":"+metricsPort, nil)
+		if err != nil {
+			log.Fatalf("failed to start metrics server: %v", err)
+		}
+	}()
+	// metricsRegistered = true
+	//}
 	log = logrus.New()
 	log.Level = logrus.DebugLevel
 	log.Formatter = &logrus.JSONFormatter{
@@ -102,7 +128,6 @@ func main() {
 	if os.Getenv("PORT") != "" {
 		port = os.Getenv("PORT")
 	}
-
 	svc := new(checkoutService)
 	mustMapEnv(&svc.shippingSvcAddr, "SHIPPING_SERVICE_ADDR")
 	mustMapEnv(&svc.productCatalogSvcAddr, "PRODUCT_CATALOG_SERVICE_ADDR")
@@ -141,10 +166,6 @@ func main() {
 	log.Infof("starting to listen on tcp: %q", lis.Addr().String())
 	err = srv.Serve(lis)
 	log.Fatal(err)
-}
-
-func initStats() {
-	//TODO(arbrown) Implement OpenTelemetry stats
 }
 
 func initTracing() {
@@ -266,7 +287,11 @@ func (cs *checkoutService) PlaceOrder(ctx context.Context, req *pb.PlaceOrderReq
 		ShippingAddress:    req.Address,
 		Items:              prep.orderItems,
 	}
-
+	orderDetailsCounter.WithLabelValues(
+		string(orderResult.OrderId),
+		string(orderResult.ShippingTrackingId),
+		string(orderResult.ShippingCost.CurrencyCode),
+	).Inc()
 	if err := cs.sendOrderConfirmation(ctx, req.Email, orderResult); err != nil {
 		log.Warnf("failed to send order confirmation to %q: %+v", req.Email, err)
 	} else {

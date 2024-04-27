@@ -64,6 +64,16 @@ var (
 		[]string{"method", "handler", "status"},
 	)
 )
+var (
+	requestDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "http_request_duration_seconds",
+			Help:    "HTTP request duration in seconds.",
+			Buckets: []float64{0.1, 0.2, 0.5, 1, 2, 5},
+		},
+		[]string{"method", "handler", "status"},
+	)
+)
 
 type ctxKeySessionID struct{}
 
@@ -93,8 +103,11 @@ type frontendServer struct {
 	collectorConn *grpc.ClientConn
 }
 
-func main() {
+func init() {
+	prometheus.MustRegister(requestDuration)
 	prometheus.MustRegister(requestsTotal)
+}
+func main() {
 	ctx := context.Background()
 	log := logrus.New()
 	log.Level = logrus.DebugLevel

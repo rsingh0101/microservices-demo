@@ -17,10 +17,13 @@ package main
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"time"
 
 	"cloud.google.com/go/profiler"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
@@ -34,11 +37,19 @@ import (
 
 const (
 	defaultPort = "50051"
+	metricPort  = "8081"
 )
 
 var log *logrus.Logger
+var (
+	shippingRequests = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "shipping_requests",
+		Help: "Total number of shipping requests.",
+	})
+)
 
 func init() {
+	prometheus.MustRegister(shippingRequests)
 	log = logrus.New()
 	log.Level = logrus.DebugLevel
 	log.Formatter = &logrus.JSONFormatter{
@@ -78,7 +89,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-
+	http.Handle("/metrics", promhttp.Handler())
+	go func() {
+		log.Infof("Prometheus metrics server listening on port %s", metricPort)
+		if err := http.ListenAndServe(":"+metricPort, nil); err != nil {
+			log.Fatalf("failed to start Prometheus metrics server: %v", err)
+		}
+	}()
 	var srv *grpc.Server
 	if os.Getenv("DISABLE_STATS") == "" {
 		log.Info("Stats enabled, but temporarily unavailable")
@@ -139,13 +156,11 @@ func (s *server) ShipOrder(ctx context.Context, in *pb.ShipOrderRequest) (*pb.Sh
 	id := CreateTrackingId(baseAddress)
 
 	// 2. Generate a response.
+	shippingRequests.Inc()
+
 	return &pb.ShipOrderResponse{
 		TrackingId: id,
 	}, nil
-}
-
-func initStats() {
-	//TODO(arbrown) Implement OpenTelemetry stats
 }
 
 func initTracing() {

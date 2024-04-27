@@ -22,6 +22,8 @@
     "@opentelemetry/semantic-conventions": "1.22.0",
     "pino": "8.19.0",
     "simple-card-validator": "^1.1.0",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.0",
+    "prom-client": "^14.0.0",
+    "express": "^4.17.1"
   }
 }

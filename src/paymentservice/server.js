@@ -17,9 +17,41 @@ const grpc = require('@grpc/grpc-js');
 const protoLoader = require('@grpc/proto-loader');
 
 const charge = require('./charge');
-
+const express = require('express');
+const prometheus = require('prom-client');
+const app = express();
 const logger = require('./logger')
+const validTransactionsCounter = new prometheus.Counter({
+  name: 'valid_transactions_total',
+  help: 'Total number of valid transactions processed',
+});
+const revenue_counter = new prometheus.Counter({
+  name: 'revenue_total',
+  help: 'Total sales figure on valid number of transactions',
+  labelNames: ['Currency_code']
+})
 
+app.get('/metrics', async (req, res) => {
+  try {
+    res.set('Content-Type', prometheus.register.contentType);
+    const metricsData = await prometheus.register.metrics();
+    res.end(metricsData);
+  } catch (error) {
+    console.error('Error fetching metrics:', error);
+    res.status(500).send('Error fetching metrics');
+  }
+});
+
+
+const PORT = 3000; // Port 3000 is used
+
+app.listen(PORT, () => {
+  console.log(`Express server listening on port ${PORT}`);
+});
+function calculateRevenue(amount) {
+  const totalRevenue = parseFloat(amount.units) + parseFloat(amount.nanos / 1e9); // Convert nanos to whole units
+  return parseFloat(totalRevenue);
+}
 class HipsterShopServer {
   constructor(protoRoot, port = HipsterShopServer.PORT) {
     this.port = port;
@@ -32,7 +64,7 @@ class HipsterShopServer {
     this.server = new grpc.Server();
     this.loadAllProtos(protoRoot);
   }
-
+  
   /**
    * Handler for PaymentService.Charge.
    * @param {*} call  { ChargeRequest }
@@ -42,13 +74,17 @@ class HipsterShopServer {
     try {
       logger.info(`PaymentService#Charge invoked with request ${JSON.stringify(call.request)}`);
       const response = charge(call.request);
+      const { amount } = call.request;
+      const totalRevenue= calculateRevenue(amount);
+      validTransactionsCounter.inc();
+      revenue_counter.labels(amount.currency_code).inc(totalRevenue);
       callback(null, response);
     } catch (err) {
       console.warn(err);
       callback(err);
     }
   }
-
+  
   static CheckHandler(call, callback) {
     callback(null, { status: 'SERVING' });
   }
@@ -102,5 +138,6 @@ class HipsterShopServer {
 }
 
 HipsterShopServer.PORT = process.env.PORT;
-
-module.exports = HipsterShopServer;
+module.exports = {
+  HipsterShopServer: HipsterShopServer
+};

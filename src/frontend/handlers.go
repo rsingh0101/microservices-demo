@@ -461,7 +461,7 @@ func (fe *frontendServer) chatBotHandler(w http.ResponseWriter, r *http.Request)
 
 	var response LLMResponse
 
-	url := "http://" + fe.shoppingAssistantSvcAddr
+	url := "http://" + fe.shippingSvcAddr
 	req, err := http.NewRequest(http.MethodPost, url, r.Body)
 	if err != nil {
 		renderHTTPError(log, r, w, errors.Wrap(err, "failed to create request"), http.StatusInternalServerError)

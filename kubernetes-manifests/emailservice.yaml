@@ -81,3 +81,6 @@ spec:
   - name: grpc
     port: 5000
     targetPort: 8080
+  - name: metrics
+    port: 8081
+    targetPort: 8081
